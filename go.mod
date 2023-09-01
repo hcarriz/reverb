@@ -1,4 +1,4 @@
-module reverb
+module github.com/hcarriz/reverb
 
 go 1.21.0
 

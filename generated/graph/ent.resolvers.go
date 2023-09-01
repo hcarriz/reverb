@@ -7,7 +7,8 @@ package graph
 import (
 	"context"
 	"fmt"
-	"reverb/generated/ent"
+
+	"github.com/hcarriz/reverb/generated/ent"
 )
 
 // Node is the resolver for the node field.

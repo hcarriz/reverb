@@ -3,9 +3,9 @@
 package intercept
 
 import (
-	"reverb/generated/ent"
-	"reverb/generated/ent/predicate"
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent"
+	"github.com/hcarriz/reverb/generated/ent/predicate"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 	"context"
 	"fmt"
 

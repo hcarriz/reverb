@@ -3,15 +3,15 @@
 package ent
 
 import (
-	"reverb/generated/ent/predicate"
+	"github.com/hcarriz/reverb/generated/ent/predicate"
 	"context"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 
-	"reverb/generated/ent/internal"
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent/internal"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 )
 
 // TodoDelete is the builder for deleting a Todo entity.

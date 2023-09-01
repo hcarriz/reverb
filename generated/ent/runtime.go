@@ -3,7 +3,7 @@
 package ent
 
 import (
-	"reverb/generated/schema"
+	"github.com/hcarriz/reverb/generated/schema"
 )
 
 // The init function reads all schema descriptors with runtime code

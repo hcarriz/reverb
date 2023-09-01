@@ -3,8 +3,8 @@
 package ent
 
 import (
-	"reverb/generated/ent/predicate"
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent/predicate"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 	"context"
 	"errors"
 	"fmt"

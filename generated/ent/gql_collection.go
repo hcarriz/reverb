@@ -3,7 +3,7 @@
 package ent
 
 import (
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 	"context"
 
 	"entgo.io/ent/dialect/sql"

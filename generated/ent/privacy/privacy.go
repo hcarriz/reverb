@@ -3,7 +3,7 @@
 package privacy
 
 import (
-	"reverb/generated/ent"
+	"github.com/hcarriz/reverb/generated/ent"
 	"context"
 	"fmt"
 

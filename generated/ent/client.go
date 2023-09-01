@@ -8,15 +8,15 @@ import (
 	"fmt"
 	"log"
 
-	"reverb/generated/ent/migrate"
+	"github.com/hcarriz/reverb/generated/ent/migrate"
 
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 
-	"reverb/generated/ent/internal"
+	"github.com/hcarriz/reverb/generated/ent/internal"
 	stdsql "database/sql"
 )
 

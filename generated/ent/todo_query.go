@@ -3,8 +3,8 @@
 package ent
 
 import (
-	"reverb/generated/ent/predicate"
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent/predicate"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 	"context"
 	"fmt"
 	"math"
@@ -14,7 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 
-	"reverb/generated/ent/internal"
+	"github.com/hcarriz/reverb/generated/ent/internal"
 )
 
 // TodoQuery is the builder for querying Todo entities.

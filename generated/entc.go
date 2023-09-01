@@ -29,8 +29,8 @@ func main() {
 
 	config := &gen.Config{
 		Target:    "ent",
-		Package:   "reverb/generated/ent",
-		Schema:    "reverb/generated/schema",
+		Package:   "github.com/hcarriz/reverb/generated/ent",
+		Schema:    "github.com/hcarriz/reverb/generated/schema",
 		Templates: entgql.AllTemplates,
 		Features:  gen.AllFeatures,
 	}

@@ -3,8 +3,8 @@
 package graph
 
 import (
-	"reverb/generated/ent"
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 	"bytes"
 	"context"
 	"errors"
@@ -356,7 +356,7 @@ scalar Cursor
 An object with an ID.
 Follows the [Relay Global Object Identification Specification](https://relay.dev/graphql/objectidentification.htm)
 """
-interface Node @goModel(model: "reverb/generated/ent.Noder") {
+interface Node @goModel(model: "github.com/hcarriz/reverb/generated/ent.Noder") {
   """The id of the object."""
   id: ID!
 }
@@ -402,7 +402,7 @@ type Todo implements Node {
   priority: TodoPriority!
 }
 """TodoPriority is enum for the field priority"""
-enum TodoPriority @goModel(model: "reverb/generated/ent/todo.Priority") {
+enum TodoPriority @goModel(model: "github.com/hcarriz/reverb/generated/ent/todo.Priority") {
   low
   medium
   high

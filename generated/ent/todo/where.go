@@ -3,7 +3,7 @@
 package todo
 
 import (
-	"reverb/generated/ent/predicate"
+	"github.com/hcarriz/reverb/generated/ent/predicate"
 	"time"
 
 	"entgo.io/ent/dialect/sql"

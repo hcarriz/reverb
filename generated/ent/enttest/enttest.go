@@ -3,12 +3,12 @@
 package enttest
 
 import (
-	"reverb/generated/ent"
+	"github.com/hcarriz/reverb/generated/ent"
 	"context"
 	// required by schema hooks.
-	_ "reverb/generated/ent/runtime"
+	_ "github.com/hcarriz/reverb/generated/ent/runtime"
 
-	"reverb/generated/ent/migrate"
+	"github.com/hcarriz/reverb/generated/ent/migrate"
 
 	"entgo.io/ent/dialect/sql/schema"
 )

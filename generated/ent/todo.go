@@ -3,7 +3,7 @@
 package ent
 
 import (
-	"reverb/generated/ent/todo"
+	"github.com/hcarriz/reverb/generated/ent/todo"
 	"fmt"
 	"strings"
 	"time"
