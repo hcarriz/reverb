@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,7 +92,7 @@ func TestChannel(t *testing.T) {
 
 }
 
-func TestSignal(t *testing.T) {
+func TestSingle(t *testing.T) {
 
 	check := require.New(t)
 
@@ -99,7 +100,7 @@ func TestSignal(t *testing.T) {
 
 	addr := fmt.Sprintf("http://localhost:%d", port)
 
-	_, err := Single(testServer(port))
+	_, err := Single(testServer(port), Logger(slogt.New(t)))
 	check.NoError(err)
 
 	client := http.DefaultClient

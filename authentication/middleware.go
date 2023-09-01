@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"ariga.io/sqlcomment"
+	"github.com/alexedwards/scs/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/markbates/goth/gothic"
 )
@@ -23,7 +24,25 @@ func setUser(c echo.Context, id string) echo.Context {
 
 }
 
-func (a *auth) MiddlewareSetIPAddress() echo.MiddlewareFunc {
+func MiddlewareMustBeAuthenticated(db DB) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+
+			userID, ok := c.Request().Context().Value("user").(string)
+			if !ok {
+				return c.NoContent(http.StatusUnauthorized)
+			}
+
+			if _, err := db.GetUser(c.Request().Context(), userID); err != nil {
+				return c.NoContent(http.StatusUnauthorized)
+			}
+
+			return next(c)
+		}
+	}
+}
+
+func MiddlewareSetIPAddress() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 
@@ -39,11 +58,11 @@ func (a *auth) MiddlewareSetIPAddress() echo.MiddlewareFunc {
 	}
 }
 
-func (a *auth) MiddlewareSessionManager() echo.MiddlewareFunc {
+func MiddlewareSessionManager(session *scs.SessionManager, key string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 
-			if usrID := a.session.GetString(c.Request().Context(), a.names.session); usrID != "" {
+			if usrID := session.GetString(c.Request().Context(), key); usrID != "" {
 				c = setUser(c, usrID)
 			}
 
@@ -52,7 +71,7 @@ func (a *auth) MiddlewareSessionManager() echo.MiddlewareFunc {
 	}
 }
 
-func (a *auth) MiddlewareBearerToken() echo.MiddlewareFunc {
+func MiddlewareBearerToken(db DB) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 
@@ -63,7 +82,7 @@ func (a *auth) MiddlewareBearerToken() echo.MiddlewareFunc {
 					tk = b[1]
 				}
 
-				usrID, err := a.db.GetUserIDFromToken(c.Request().Context(), tk)
+				usrID, err := db.GetUserIDFromToken(c.Request().Context(), tk)
 				if err != nil {
 					return c.NoContent(http.StatusUnauthorized)
 				}
@@ -77,7 +96,7 @@ func (a *auth) MiddlewareBearerToken() echo.MiddlewareFunc {
 	}
 }
 
-func (a *auth) MiddlewareOIDC() echo.MiddlewareFunc {
+func MiddlewareOIDC() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 

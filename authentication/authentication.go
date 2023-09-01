@@ -6,17 +6,35 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/gorilla/sessions"
 	"github.com/labstack/echo/v4"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
 )
 
 var (
-	ErrMissingDB = errors.New("missing database")
+	ErrEmptyArgument      = errors.New("argument can not be empty")
+	ErrInvalidProvider    = errors.New("provider is invalid")
+	ErrLoggerIsInvalid    = errors.New("provided logger is nil")
+	ErrMissingDB          = errors.New("missing database")
+	ErrMissingDomain      = errors.New("missing domain")
+	ErrMissingProvider    = errors.New("missing provider")
+	ErrNotSetup           = errors.New("this function has not been completed")
+	ErrSessionsStoreIsNil = errors.New("provided sessions.Store is nil")
 )
+
+const (
+	DefaultProvider = "provider"
+)
+
+// Log interface that this package uses. By default it is `log/slog`
+type Log interface {
+	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
+}
 
 type DB interface {
 	GetUserWithSession(ctx context.Context, userID string, session string) (any, error)
@@ -29,7 +47,9 @@ type DB interface {
 
 type auth struct {
 	session   *scs.SessionManager
-	logger    *slog.Logger
+	backend   *url.URL
+	frontend  *url.URL
+	logger    Log
 	paths     paths
 	names     names
 	db        DB
@@ -59,19 +79,102 @@ type Option interface {
 	apply(*auth) error
 }
 
-func New(g *echo.Group, opts ...Option) error {
+type Options []Option
+
+func (o Options) apply(a *auth) error {
+
+	var err error
+
+	for _, option := range o {
+		err = errors.Join(option.apply(a))
+	}
+
+	return err
+}
+
+type option func(*auth) error
+
+func (o option) apply(a *auth) error {
+	return o(a)
+}
+
+func SetStore(store sessions.Store) Option {
+	return option(func(a *auth) error {
+
+		if store == nil {
+			return ErrSessionsStoreIsNil
+		}
+
+		gothic.Store = store
+
+		return nil
+	})
+}
+
+func SetLogger(logger Log) Option {
+	return option(func(a *auth) error {
+
+		if logger == nil {
+			return ErrLoggerIsInvalid
+		}
+
+		a.logger = logger
+
+		return nil
+	})
+}
+
+// SetFrontend sets the url for the frontend to use.
+func SetFrontend(raw string) Option {
+	return option(func(a *auth) error {
+
+		if raw == "" {
+			return ErrEmptyArgument
+		}
+
+		u, err := url.Parse(raw)
+		if err != nil {
+			return err
+		}
+
+		a.frontend = u
+
+		return nil
+	})
+}
+
+// SetBackend sets the url for the backend to use.
+func SetBackend(raw string) Option {
+	return option(func(a *auth) error {
+
+		if raw == "" {
+			return ErrEmptyArgument
+		}
+
+		u, err := url.Parse(raw)
+		if err != nil {
+			return err
+		}
+
+		a.backend = u
+
+		return nil
+	})
+}
+
+func New(g *echo.Echo, opts ...Option) error {
 
 	a := &auth{
-		logger: slog.Default(),
+		logger:  slog.Default(),
+		session: scs.New(),
 		paths: paths{
-			whoami:      "/auth/whoami",
 			afterLogin:  "/",
 			afterLogout: "/",
-			profile:     "/profile",
+			profile:     "/",
 		},
 		names: names{
 			session:  "user_session",
-			provider: "provider",
+			provider: DefaultProvider,
 			refetch:  "user_refetch",
 			addition: "add_existing_account",
 		},
@@ -92,15 +195,40 @@ func New(g *echo.Group, opts ...Option) error {
 		return ErrMissingDB
 	}
 
-	g.GET(fmt.Sprintf("/add/:%s", a.names.provider), a.addExistingAccount)
-	g.GET(fmt.Sprintf("/login/:%s", a.names.provider), a.login)
-	g.GET(fmt.Sprintf("/callback/:%s", a.names.provider), a.callback)
-	g.GET(fmt.Sprintf("/logout/:%s", a.names.provider), a.logout)
-	g.GET("/providers", a.listProviders)
-	g.GET("/refetch", a.refetch)
-	g.GET("/whoami", a.whoami)
+	group := g.Group("/auth",
+		MiddlewareBearerToken(a.db),
+		MiddlewareSessionManager(a.session, a.names.session),
+		MiddlewareOIDC(),
+		MiddlewareSetIPAddress(),
+	)
+
+	group.GET(fmt.Sprintf("/add/:%s", a.names.provider), a.addExistingAccount, MiddlewareMustBeAuthenticated(a.db))
+	group.GET(fmt.Sprintf("/login/:%s", a.names.provider), a.login)
+	group.GET(fmt.Sprintf("/callback/:%s", a.names.provider), a.callback)
+	group.GET("/logout", a.logout, MiddlewareMustBeAuthenticated(a.db))
+	group.GET("/providers", a.listProviders)
+	group.GET("/refetch", a.refetch, MiddlewareMustBeAuthenticated(a.db))
+	group.GET("/whoami", a.whoami)
 
 	return nil
+}
+
+func (a *auth) redir(c echo.Context, path string) error {
+
+	if a.frontend != nil {
+
+		u2 := cloneURL(a.frontend)
+		u2.Path = path
+
+		path = u2.String()
+
+	}
+
+	return c.Redirect(http.StatusFound, path)
+}
+
+func (a *auth) err(c echo.Context, err error) error {
+	return c.String(http.StatusMethodNotAllowed, err.Error())
 }
 
 func (a *auth) listProviders(c echo.Context) error {
@@ -120,7 +248,7 @@ func (a *auth) whoami(c echo.Context) error {
 
 	userID := a.session.GetString(c.Request().Context(), a.names.session)
 	if userID == "" {
-		a.logger.Warn("user does not have session")
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelWarn, "user does not have session")
 		return c.NoContent(http.StatusUnauthorized)
 	}
 
@@ -128,11 +256,11 @@ func (a *auth) whoami(c echo.Context) error {
 
 	result, err := a.db.GetUserWithSession(c.Request().Context(), userID, token)
 	if err != nil {
-		a.logger.Error("unable to get user", slog.String("user", userID), slog.String("error", err.Error()))
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "unable to get user", slog.String("user", userID), slerr(err))
 		return c.NoContent(http.StatusUnauthorized)
 	}
 
-	a.logger.Debug("found user", slog.String("id", userID), slog.Any("data", result))
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "found user", slog.String("id", userID), slog.Any("data", result))
 
 	return c.JSON(http.StatusOK, result)
 }
@@ -141,35 +269,46 @@ func (a *auth) login(c echo.Context) error {
 
 	provider := c.Param(a.names.provider)
 
-	if _, err := gothic.CompleteUserAuth(c.Response(), gothic.GetContextWithProvider(c.Request(), provider)); err != nil {
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "attempting to login", slog.String("provider", provider))
+
+	usr, err := gothic.CompleteUserAuth(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+	if err != nil {
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelWarn, "user is not signed in")
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelInfo, "signing in user")
 		gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
 		return nil
 	}
 
-	return c.Redirect(http.StatusFound, a.paths.afterLogin)
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "success, redirecting", slog.String("uri", a.paths.afterLogin), slog.String("user", usr.UserID))
+
+	return a.redir(c, a.paths.afterLogin)
 
 }
 
 func (a *auth) logout(c echo.Context) error {
 
-	provider := c.Param(a.names.provider)
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "attempting to logout")
 
-	usr := a.session.GetString(c.Request().Context(), a.names.session)
-	if usr != "" {
-		gothic.Logout(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+	if provider := a.session.GetString(c.Request().Context(), a.names.provider); provider != "" {
+		if usr := a.session.GetString(c.Request().Context(), a.names.session); usr != "" {
+			if err := gothic.Logout(c.Response(), gothic.GetContextWithProvider(c.Request(), provider)); err != nil {
+				a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "unable to logout", slerr(err))
+			}
+		}
 	}
 
-	a.session.Destroy(c.Request().Context())
+	if err := a.session.Destroy(c.Request().Context()); err != nil {
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "unable to destroy session", slerr(err))
+	}
 
-	return c.Redirect(http.StatusFound, a.paths.afterLogout)
+	return a.redir(c, a.paths.afterLogout)
 }
 
-// addExistingAccount should be locked down with
 func (a *auth) addExistingAccount(c echo.Context) error {
 
 	userID := a.session.GetString(c.Request().Context(), a.names.session)
 	if userID != "" {
-		a.logger.Error("no user")
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "no user")
 		return c.NoContent(http.StatusUnauthorized)
 	}
 

@@ -20,7 +20,11 @@ var (
 
 type config struct {
 	timeout time.Duration
-	logger  *slog.Logger
+	logger  Log
+}
+
+type Log interface {
+	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
 }
 
 type Option interface {
@@ -46,7 +50,7 @@ func Timeout(duration time.Duration) Option {
 	})
 }
 
-func Logger(logger *slog.Logger) Option {
+func Logger(logger Log) Option {
 	return option(func(c *config) error {
 		c.logger = logger
 		return nil
@@ -100,7 +104,7 @@ func Multiple(services []Service, opts ...Option) (chan os.Signal, error) {
 			defer cancel()
 
 			if err := service.Close(ctx); err != nil {
-				cfg.logger.Error("unable to close service", slog.String("error", err.Error()))
+				cfg.logger.LogAttrs(ctx, slog.LevelError, "unable to close service", slog.String("error", err.Error()))
 			}
 
 		}()
@@ -108,7 +112,7 @@ func Multiple(services []Service, opts ...Option) (chan os.Signal, error) {
 		go func() {
 
 			if err := service.Start(); err != nil {
-				cfg.logger.Error("service error", slog.String("error", err.Error()))
+				cfg.logger.LogAttrs(context.Background(), slog.LevelError, "service error", slog.String("error", err.Error()))
 			}
 
 		}()
