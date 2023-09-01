@@ -139,7 +139,7 @@ func (s *Store) Commit(token string, data []byte, expires time.Time) error {
 		return err
 	}
 
-	s.logger.DebugContext(ctx, "commited token", slog.String("token", token), slog.String("data", string(data)), slog.Time("expires", expires), slog.Time("added", now))
+	s.logger.DebugContext(ctx, "committed token", slog.String("token", token), slog.String("data", string(data)), slog.Time("expires", expires), slog.Time("added", now))
 
 	return nil
 

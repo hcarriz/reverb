@@ -219,7 +219,7 @@ func (a *auth) callback(c echo.Context) error {
 		}
 
 		if err := a.db.UserConnection(c.Request().Context(), userID, connectionID); err != nil {
-			return a.authError(c, "unable to connect user with authentication", err, slog.String("user", userID), slog.String("provider", provider), slog.String("conenction_id", connectionID))
+			return a.authError(c, "unable to connect user with authentication", err, slog.String("user", userID), slog.String("provider", provider), slog.String("connection_id", connectionID))
 		}
 
 		return c.Redirect(http.StatusFound, a.paths.profile)

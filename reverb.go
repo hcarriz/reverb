@@ -243,7 +243,7 @@ func New(opts ...Option) (*echo.Echo, error) {
 				slog.String("error", v.Error.Error()),
 				slog.Duration("latency", v.Latency),
 				slog.String("content_length", v.ContentLength),
-				slog.Int64("reponse_size", v.ResponseSize),
+				slog.Int64("response_size", v.ResponseSize),
 			)
 
 			return nil
