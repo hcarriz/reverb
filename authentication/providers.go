@@ -3,6 +3,7 @@ package authentication
 import (
 	"fmt"
 	"net/url"
+	"slices"
 
 	"github.com/hcarriz/reverb/authentication/provider"
 	"github.com/markbates/goth"
@@ -64,7 +65,6 @@ import (
 	"github.com/markbates/goth/providers/yammer"
 	"github.com/markbates/goth/providers/yandex"
 	"github.com/markbates/goth/providers/zoom"
-	"golang.org/x/exp/slices"
 )
 
 // WithProvider adds a provider. Source is required for Okta, Nextcloud, and OpenID Providers.
