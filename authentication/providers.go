@@ -3,8 +3,8 @@ package authentication
 import (
 	"fmt"
 	"net/url"
-	"slices"
 
+	"github.com/hcarriz/reverb/authentication/provider"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/providers/amazon"
 	"github.com/markbates/goth/providers/apple"
@@ -64,177 +64,18 @@ import (
 	"github.com/markbates/goth/providers/yammer"
 	"github.com/markbates/goth/providers/yandex"
 	"github.com/markbates/goth/providers/zoom"
+	"golang.org/x/exp/slices"
 )
-
-type Provider struct {
-	slug    string
-	display string
-}
-
-func (p Provider) String() string {
-	return p.slug
-}
-
-var (
-	Unknown      = Provider{"", ""}
-	Amazon       = Provider{"amazon", "Amazon"}
-	Apple        = Provider{"apple", "Apple"}
-	Auth0        = Provider{"auth0", "Auth0"}
-	Azure        = Provider{"azure_ad", "Azure AD"}
-	Battlenet    = Provider{"battlenet", "Battlenet"}
-	Bitbucket    = Provider{"bitbucket", "Bitbucket"}
-	Box          = Provider{"box", "Box"}
-	Dailymotion  = Provider{"dailymotion", "Dailymotion"}
-	Deezer       = Provider{"deezer", "Deezer"}
-	DigitalOcean = Provider{"digital_ocean", "Digital Ocean"}
-	Discord      = Provider{"discord", "Discord"}
-	Dropbox      = Provider{"dropbox", "Dropbox"}
-	Eve          = Provider{"eve_online", "Eve Online"}
-	Facebook     = Provider{"facebook", "Facebook"}
-	Fitbit       = Provider{"fitbit", "Fitbit"}
-	Gitea        = Provider{"gitea", "Gitea"}
-	Github       = Provider{"github", "Github"}
-	Gitlab       = Provider{"gitlab", "Gitlab"}
-	Google       = Provider{"google", "Google"}
-	GooglePlus   = Provider{"google_plus", "Google Plus"}
-	Heroku       = Provider{"heroku", "Heroku"}
-	Instagram    = Provider{"instagram", "Instagram"}
-	Intercom     = Provider{"intercom", "Intercom"}
-	Kakao        = Provider{"kakao", "Kakao"}
-	LastFM       = Provider{"last_fm", "Last FM"}
-	LINE         = Provider{"line", "LINE"}
-	Linkedin     = Provider{"linkedin", "Linkedin"}
-	Mastodon     = Provider{"mastodon", "Mastodon"}
-	Meetup       = Provider{"meetup", "Meetup.com"}
-	Microsoft    = Provider{"microsoft_online", "Microsoft Online"}
-	Naver        = Provider{"naver", "Naver"}
-	NextCloud    = Provider{"nextCloud", "NextCloud"}
-	Okta         = Provider{"okta", "Okta"}
-	Onedrive     = Provider{"onedrive", "Onedrive"}
-	OpenID       = Provider{"openid_connect", "OpenID Connect"}
-	Patreon      = Provider{"patreon", "Patreon"}
-	Paypal       = Provider{"paypal", "Paypal"}
-	Salesforce   = Provider{"salesforce", "Salesforce"}
-	SeaTalk      = Provider{"seatalk", "SeaTalk"}
-	Shopify      = Provider{"shopify", "Shopify"}
-	Slack        = Provider{"slack", "Slack"}
-	SoundCloud   = Provider{"soundcloud", "SoundCloud"}
-	Spotify      = Provider{"spotify", "Spotify"}
-	Steam        = Provider{"steam", "Steam"}
-	Strava       = Provider{"strava", "Strava"}
-	Stripe       = Provider{"stripe", "Stripe"}
-	TikTok       = Provider{"tikTok", "TikTok"}
-	Twitch       = Provider{"twitch", "Twitch"}
-	Twitter      = Provider{"twitter", "Twitter"}
-	Typetalk     = Provider{"typetalk", "Typetalk"}
-	Uber         = Provider{"uber", "Uber"}
-	VK           = Provider{"vk", "VK"}
-	WeCom        = Provider{"wecom", "WeCom"}
-	Wepay        = Provider{"wepay", "Wepay"}
-	Xero         = Provider{"xero", "Xero"}
-	Yahoo        = Provider{"yahoo", "Yahoo"}
-	Yammer       = Provider{"yammer", "Yammer"}
-	Yandex       = Provider{"yandex", "Yandex"}
-	Zoom         = Provider{"zoom", "Zoom"}
-)
-
-var all = []Provider{
-	Amazon,
-	Apple,
-	Auth0,
-	Azure,
-	Battlenet,
-	Bitbucket,
-	Box,
-	Dailymotion,
-	Deezer,
-	DigitalOcean,
-	Discord,
-	Dropbox,
-	Eve,
-	Facebook,
-	Fitbit,
-	Gitea,
-	Github,
-	Gitlab,
-	Google,
-	GooglePlus,
-	Heroku,
-	Instagram,
-	Intercom,
-	Kakao,
-	LastFM,
-	LINE,
-	Linkedin,
-	Mastodon,
-	Meetup,
-	Microsoft,
-	Naver,
-	NextCloud,
-	Okta,
-	Onedrive,
-	OpenID,
-	Patreon,
-	Paypal,
-	Salesforce,
-	SeaTalk,
-	Shopify,
-	Slack,
-	SoundCloud,
-	Spotify,
-	Steam,
-	Strava,
-	Stripe,
-	TikTok,
-	Twitch,
-	Twitter,
-	Typetalk,
-	Uber,
-	VK,
-	WeCom,
-	Wepay,
-	Xero,
-	Yahoo,
-	Yammer,
-	Yandex,
-	Zoom,
-}
-
-func Slugs() []string {
-
-	list := []string{}
-
-	for _, single := range all {
-		list = append(list, single.slug)
-	}
-
-	return list
-}
-
-func Public() []string {
-
-	list := []string{}
-
-	for _, single := range all {
-		list = append(list, single.display)
-	}
-
-	return list
-}
-
-func Validate(p Provider) bool {
-	return slices.Contains(all, p)
-}
 
 // WithProvider adds a provider. Source is required for Okta, Nextcloud, and OpenID Providers.
-func WithProvider(p Provider, key, secret, callbackDomain, source string) Option {
+func WithProvider(p provider.Provider, key, secret, callbackDomain, source string) Option {
 	return option(func(a *auth) error {
 
-		if !Validate(p) {
+		if !provider.Validate(p) {
 			return ErrInvalidProvider
 		}
 
-		if slices.Contains([]Provider{Okta, NextCloud, OpenID}, p) {
+		if slices.Contains([]provider.Provider{provider.Okta, provider.NextCloud, provider.OpenID}, p) {
 			if _, err := url.Parse(source); err != nil {
 				return err
 			}
@@ -245,81 +86,81 @@ func WithProvider(p Provider, key, secret, callbackDomain, source string) Option
 			return err
 		}
 
-		u.Path = fmt.Sprintf("/auth/callback/%s", p.slug)
+		u.Path = fmt.Sprintf("/auth/callback/%s", p)
 
 		d := cloneURL(u)
 		d.Path = ""
 
 		switch p {
-		case Amazon:
+		case provider.Amazon:
 			goth.UseProviders(amazon.New(key, secret, u.String()))
-		case Apple:
+		case provider.Apple:
 			goth.UseProviders(apple.New(key, secret, u.String(), nil, apple.ScopeEmail, apple.ScopeName))
-		case Auth0:
+		case provider.Auth0:
 			goth.UseProviders(auth0.New(key, secret, u.String(), d.String()))
-		case Azure:
+		case provider.Azure:
 			goth.UseProviders(azuread.New(key, secret, u.String(), nil))
-		case Battlenet:
+		case provider.Battlenet:
 			goth.UseProviders(battlenet.New(key, secret, u.String()))
-		case Bitbucket:
+		case provider.Bitbucket:
 			goth.UseProviders(bitbucket.New(key, secret, u.String()))
-		case Box:
+		case provider.Box:
 			goth.UseProviders(box.New(key, secret, u.String()))
-		case Dailymotion:
+		case provider.Dailymotion:
 			goth.UseProviders(dailymotion.New(key, secret, u.String(), "email"))
-		case Deezer:
+		case provider.Deezer:
 			goth.UseProviders(deezer.New(key, secret, u.String(), "email"))
-		case DigitalOcean:
+		case provider.DigitalOcean:
 			goth.UseProviders(digitalocean.New(key, secret, u.String(), "read"))
-		case Discord:
+		case provider.Discord:
 			goth.UseProviders(discord.New(key, secret, u.String(), discord.ScopeIdentify, discord.ScopeEmail))
-		case Dropbox:
+		case provider.Dropbox:
 			goth.UseProviders(dropbox.New(key, secret, u.String()))
-		case Eve:
+		case provider.Eve:
 			goth.UseProviders(eveonline.New(key, secret, u.String()))
-		case Facebook:
+		case provider.Facebook:
 			goth.UseProviders(facebook.New(key, secret, u.String()))
-		case Fitbit:
+		case provider.Fitbit:
 			goth.UseProviders(fitbit.New(key, secret, u.String()))
-		case Gitea:
+		case provider.Gitea:
 			goth.UseProviders(gitea.New(key, secret, u.String()))
-		case Github:
+		case provider.Github:
 			goth.UseProviders(github.New(key, secret, u.String(), "read:user", "user:email"))
-		case Gitlab:
+		case provider.Gitlab:
 			goth.UseProviders(gitlab.New(key, secret, u.String()))
-		case Google:
+		case provider.Google:
 			goth.UseProviders(google.New(key, secret, u.String()))
-		case GooglePlus:
+		case provider.GooglePlus:
 			goth.UseProviders(gplus.New(key, secret, u.String()))
-		case Heroku:
+		case provider.Heroku:
 			goth.UseProviders(heroku.New(key, secret, u.String()))
-		case Instagram:
+		case provider.Instagram:
 			goth.UseProviders(instagram.New(key, secret, u.String()))
-		case Intercom:
+		case provider.Intercom:
 			goth.UseProviders(intercom.New(key, secret, u.String()))
-		case Kakao:
+		case provider.Kakao:
 			goth.UseProviders(kakao.New(key, secret, u.String()))
-		case LastFM:
+		case provider.LastFM:
 			goth.UseProviders(lastfm.New(key, secret, u.String()))
-		case LINE:
+		case provider.LINE:
 			goth.UseProviders(line.New(key, secret, u.String(), "profile", "openid", "email"))
-		case Linkedin:
+		case provider.Linkedin:
 			goth.UseProviders(linkedin.New(key, secret, u.String()))
-		case Mastodon:
+		case provider.Mastodon:
 			goth.UseProviders(mastodon.New(key, secret, u.String(), "read:accounts"))
-		case Meetup:
+		case provider.Meetup:
 			goth.UseProviders(meetup.New(key, secret, u.String()))
-		case Microsoft:
+		case provider.Microsoft:
 			goth.UseProviders(microsoftonline.New(key, secret, u.String()))
-		case Naver:
+		case provider.Naver:
 			goth.UseProviders(naver.New(key, secret, u.String()))
-		case NextCloud:
+		case provider.NextCloud:
 			goth.UseProviders(nextcloud.NewCustomisedDNS(key, secret, u.String(), source))
-		case Okta:
+		case provider.Okta:
 			goth.UseProviders(okta.New(key, secret, source, u.String()))
-		case Onedrive:
+		case provider.Onedrive:
 			goth.UseProviders(onedrive.New(key, secret, u.String()))
-		case OpenID:
+		case provider.OpenID:
 
 			oic, err := openidConnect.New(key, secret, u.String(), source)
 			if err != nil {
@@ -328,51 +169,51 @@ func WithProvider(p Provider, key, secret, callbackDomain, source string) Option
 
 			goth.UseProviders(oic)
 
-		case Patreon:
+		case provider.Patreon:
 			goth.UseProviders(patreon.New(key, secret, u.String()))
-		case Paypal:
+		case provider.Paypal:
 			goth.UseProviders(paypal.New(key, secret, u.String()))
-		case Salesforce:
+		case provider.Salesforce:
 			goth.UseProviders(salesforce.New(key, secret, u.String()))
-		case SeaTalk:
+		case provider.SeaTalk:
 			goth.UseProviders(seatalk.New(key, secret, u.String()))
-		case Shopify:
+		case provider.Shopify:
 			goth.UseProviders(shopify.New(key, secret, u.String()))
-		case Slack:
+		case provider.Slack:
 			goth.UseProviders(slack.New(key, secret, u.String()))
-		case SoundCloud:
+		case provider.SoundCloud:
 			goth.UseProviders(soundcloud.New(key, secret, u.String()))
-		case Spotify:
+		case provider.Spotify:
 			goth.UseProviders(spotify.New(key, secret, u.String()))
-		case Steam:
+		case provider.Steam:
 			goth.UseProviders(steam.New(key, u.String()))
-		case Strava:
+		case provider.Strava:
 			goth.UseProviders(strava.New(key, secret, u.String()))
-		case Stripe:
+		case provider.Stripe:
 			goth.UseProviders(stripe.New(key, secret, u.String()))
-		case TikTok:
+		case provider.TikTok:
 			goth.UseProviders(tiktok.New(key, secret, u.String()))
-		case Twitch:
+		case provider.Twitch:
 			goth.UseProviders(twitch.New(key, secret, u.String()))
-		case Twitter:
+		case provider.Twitter:
 			goth.UseProviders(twitterv2.New(key, secret, u.String()))
-		case Typetalk:
+		case provider.Typetalk:
 			goth.UseProviders(typetalk.New(key, secret, u.String(), "my"))
-		case Uber:
+		case provider.Uber:
 			goth.UseProviders(uber.New(key, secret, u.String()))
-		case VK:
+		case provider.VK:
 			goth.UseProviders(vk.New(key, secret, u.String()))
-		case Wepay:
+		case provider.Wepay:
 			goth.UseProviders(wepay.New(key, secret, u.String(), "view_user"))
-		case Xero:
+		case provider.Xero:
 			goth.UseProviders(xero.New(key, secret, u.String()))
-		case Yahoo:
+		case provider.Yahoo:
 			goth.UseProviders(yahoo.New(key, secret, u.String()))
-		case Yammer:
+		case provider.Yammer:
 			goth.UseProviders(yammer.New(key, secret, u.String()))
-		case Yandex:
+		case provider.Yandex:
 			goth.UseProviders(yandex.New(key, secret, u.String()))
-		case Zoom:
+		case provider.Zoom:
 			goth.UseProviders(zoom.New(key, secret, u.String(), "read:user"))
 		default:
 			return ErrInvalidProvider

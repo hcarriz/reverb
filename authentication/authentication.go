@@ -7,10 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"time"
+	"slices"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/gorilla/sessions"
+	"github.com/hcarriz/reverb/authentication/provider"
 	"github.com/labstack/echo/v4"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
@@ -43,6 +44,8 @@ type DB interface {
 	UpdateUserInfo(ctx context.Context, id string, email string, name string) error
 	CreateConnection(ctx context.Context, oidcUserID string, provider string) (string, error)
 	UserConnection(ctx context.Context, userID string, connectionID string) error
+
+	CreateOrUpdateUser(ctx context.Context, userID string, provider string) error
 }
 
 type auth struct {
@@ -53,11 +56,11 @@ type auth struct {
 	paths     paths
 	names     names
 	db        DB
-	providers []Provider
+	providers []provider.Provider
 }
 
 type paths struct {
-	whoami      string
+	afterError  string
 	afterLogin  string
 	afterLogout string
 	profile     string
@@ -168,6 +171,7 @@ func New(g *echo.Echo, opts ...Option) error {
 		logger:  slog.Default(),
 		session: scs.New(),
 		paths: paths{
+			afterError:  "/",
 			afterLogin:  "/",
 			afterLogout: "/",
 			profile:     "/",
@@ -190,6 +194,18 @@ func New(g *echo.Echo, opts ...Option) error {
 		return err
 	}
 
+	// Sort providers
+	slices.SortFunc(a.providers, func(a, b provider.Provider) int {
+		switch {
+		case a.String() > b.String():
+			return 1
+		case a.String() < b.String():
+			return -1
+		default:
+			return 0
+		}
+	})
+
 	// Check for database
 	if a.db == nil {
 		return ErrMissingDB
@@ -207,7 +223,7 @@ func New(g *echo.Echo, opts ...Option) error {
 	group.GET(fmt.Sprintf("/callback/:%s", a.names.provider), a.callback)
 	group.GET("/logout", a.logout, MiddlewareMustBeAuthenticated(a.db))
 	group.GET("/providers", a.listProviders)
-	group.GET("/refetch", a.refetch, MiddlewareMustBeAuthenticated(a.db))
+	group.GET(fmt.Sprintf("/refetch/:%s", a.names.provider), a.refetch, MiddlewareMustBeAuthenticated(a.db))
 	group.GET("/whoami", a.whoami)
 
 	return nil
@@ -233,13 +249,13 @@ func (a *auth) err(c echo.Context, err error) error {
 
 func (a *auth) listProviders(c echo.Context) error {
 
-	// Completed
-
-	list := []string{}
+	list := make(map[string]string)
 
 	for _, single := range a.providers {
-		list = append(list, single.display)
+		list[single.String()] = single.Pretty()
 	}
+
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "displaying available providers", slog.Any("providers", list))
 
 	return c.JSON(http.StatusOK, list)
 }
@@ -306,71 +322,45 @@ func (a *auth) logout(c echo.Context) error {
 
 func (a *auth) addExistingAccount(c echo.Context) error {
 
+	provider := c.Param(a.names.provider)
+
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "attempting to add existing account", slog.String("provider", provider))
+
 	userID := a.session.GetString(c.Request().Context(), a.names.session)
 	if userID != "" {
-		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "no user")
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "no user id in session")
 		return c.NoContent(http.StatusUnauthorized)
 	}
 
 	a.session.Put(c.Request().Context(), a.names.addition, true)
 
-	gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), c.Param(a.names.provider)))
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "redirecting to provider", slog.String("provider", provider))
+
+	gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
 
 	return nil
-
 }
 
 func (a *auth) callback(c echo.Context) error {
 
-	provider := c.Param(a.names.provider)
-
-	if err := a.session.RenewToken(c.Request().Context()); err != nil {
-		return a.authError(c, "unable to renew token", err)
-	}
-
-	u, err := gothic.CompleteUserAuth(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
-	if err != nil {
-		return a.authError(c, "unable to complete", err)
-	}
-
-	// a.db.CreateConnection()
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "performing callback")
 
 	if a.session.GetBool(c.Request().Context(), a.names.refetch) {
-
-		a.db.UpdateUserInfo(c.Request().Context(), u.UserID, u.Email, gothicName(u))
-
-		a.session.Put(c.Request().Context(), a.names.refetch, false)
-
-		return c.Redirect(http.StatusFound, a.paths.profile)
-
+		return a.callbackRefetch(c)
 	}
 
 	if a.session.GetBool(c.Request().Context(), a.names.addition) {
-
-		userID := a.session.GetString(c.Request().Context(), a.names.session)
-		if userID != "" {
-			return a.authError(c, "unauthorized", errors.New("unauthorized"))
-		}
-
-		connectionID, err := a.db.CreateConnection(c.Request().Context(), u.UserID, provider)
-		if err != nil {
-			return a.authError(c, "unable to create connection", err, slog.String("user", userID), slog.String("provider", provider))
-		}
-
-		if err := a.db.UserConnection(c.Request().Context(), userID, connectionID); err != nil {
-			return a.authError(c, "unable to connect user with authentication", err, slog.String("user", userID), slog.String("provider", provider), slog.String("connection_id", connectionID))
-		}
-
-		return c.Redirect(http.StatusFound, a.paths.profile)
-
+		return a.callbackAddition(c)
 	}
 
-	return c.Redirect(http.StatusFound, a.paths.profile)
+	return a.callbackLogin(c)
 }
 
 func (a *auth) refetch(c echo.Context) error {
 
 	provider := c.Param(a.names.provider)
+
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "refetching data", slog.String("from", provider))
 
 	usr := a.session.GetString(c.Request().Context(), a.names.session)
 	if usr != "" {
@@ -385,21 +375,6 @@ func (a *auth) refetch(c echo.Context) error {
 
 }
 
-func (a *auth) authError(c echo.Context, note string, err error, attr ...slog.Attr) error {
-
-	a.logger.LogAttrs(c.Request().Context(), slog.LevelError, note, attr...)
-
-	c.SetCookie(&http.Cookie{
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-		Name:     a.names.session,
-		Path:     "/",
-		Value:    "",
-	})
-
-	return c.Redirect(http.StatusFound, a.paths.afterLogout)
-}
-
 func gothicName(g goth.User) string {
-	return ""
+	return g.Name
 }
