@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/gorilla/sessions"
@@ -26,30 +27,42 @@ var (
 	ErrMissingProvider    = errors.New("missing provider")
 	ErrNotSetup           = errors.New("this function has not been completed")
 	ErrSessionsStoreIsNil = errors.New("provided sessions.Store is nil")
+	ErrSessionsIsNil      = errors.New("provided Sessions is nil")
 )
 
 const (
 	DefaultProvider = "provider"
 )
 
+type Session interface {
+	GetString(ctx context.Context, key string) string
+	Token(context.Context) string
+	Destroy(context.Context) error
+	Put(ctx context.Context, key string, val any)
+	PopBool(ctx context.Context, key string) bool
+	RenewToken(context.Context) error
+	Commit(context.Context) (token string, expires time.Time, err error)
+}
+
 // Log interface that this package uses. By default it is `log/slog`
 type Log interface {
 	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
 }
 
+// gothID is for the id of the user from the provider.
+// userID is for the id of the user from the database.
 type DB interface {
-	GetUserWithSession(ctx context.Context, userID string, session string) (any, error)
-	GetUser(ctx context.Context, userID string) (any, error)
-	GetUserIDFromToken(ctx context.Context, token string) (string, error)
+	GetUserWithSession(ctx context.Context, userID string, token string) (user any, err error) // Get the user with the userID and the active token.
+	GetUserID(ctx context.Context, gothID string) (userID string, err error)                   // GetUserID takes a id from goth and searches for a user in the database. It returns the id of the user
+	GetUserIDFromToken(ctx context.Context, apiToken string) (string, error)                   // Get the user id from the api key
 	UpdateUserInfo(ctx context.Context, id string, email string, name string) error
-	CreateConnection(ctx context.Context, oidcUserID string, provider string) (string, error)
-	UserConnection(ctx context.Context, userID string, connectionID string) error
-
-	CreateOrUpdateUser(ctx context.Context, userID string, provider string) error
+	CreateOrUpdateUser(ctx context.Context, gothID string, provider string) (userID string, err error)
+	UserDisabled(ctx context.Context, userID string) (disabled bool, err error)
+	AddSessionToUser(ctx context.Context, gothID string, session string) error
 }
 
 type auth struct {
-	session   *scs.SessionManager
+	session   Session
 	backend   *url.URL
 	frontend  *url.URL
 	logger    Log
@@ -99,6 +112,50 @@ type option func(*auth) error
 
 func (o option) apply(a *auth) error {
 	return o(a)
+}
+
+func SetSessions(s Session) Option {
+	return option(func(a *auth) error {
+		if s == nil {
+			return ErrSessionsIsNil
+		}
+
+		a.session = s
+
+		return nil
+	})
+}
+
+// WithProvider adds a provider. Source is required for Okta, Nextcloud, and OpenID Providers.
+func WithProvider(p provider.Provider, key, secret, callbackDomain, source string) Option {
+	return option(func(a *auth) error {
+
+		if !provider.Validate(p) {
+			return ErrInvalidProvider
+		}
+
+		if slices.Contains([]provider.Provider{provider.Okta, provider.NextCloud, provider.OpenID}, p) {
+			if _, err := url.Parse(source); err != nil {
+				return err
+			}
+		}
+
+		u, err := url.Parse(callbackDomain)
+		if err != nil {
+			return err
+		}
+
+		u.Path = fmt.Sprintf("/auth/callback/%s", p)
+
+		d := cloneURL(u)
+		d.Path = ""
+
+		p.Use(key, secret, callbackDomain, source)
+
+		a.providers = append(a.providers, p)
+
+		return nil
+	})
 }
 
 func SetStore(store sessions.Store) Option {
@@ -240,7 +297,7 @@ func (a *auth) redir(c echo.Context, path string) error {
 
 	}
 
-	return c.Redirect(http.StatusFound, path)
+	return c.Redirect(http.StatusTemporaryRedirect, path)
 }
 
 func (a *auth) err(c echo.Context, err error) error {
@@ -262,17 +319,21 @@ func (a *auth) listProviders(c echo.Context) error {
 
 func (a *auth) whoami(c echo.Context) error {
 
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "who am i", slog.String("session", a.names.session))
+
 	userID := a.session.GetString(c.Request().Context(), a.names.session)
 	if userID == "" {
 		a.logger.LogAttrs(c.Request().Context(), slog.LevelWarn, "user does not have session")
 		return c.NoContent(http.StatusUnauthorized)
 	}
 
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "found user session", slog.String("user_id", userID))
+
 	token := a.session.Token(c.Request().Context())
 
 	result, err := a.db.GetUserWithSession(c.Request().Context(), userID, token)
 	if err != nil {
-		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "unable to get user", slog.String("user", userID), slerr(err))
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "unable to get user from database", slog.String("user_id", userID), slerr(err))
 		return c.NoContent(http.StatusUnauthorized)
 	}
 
@@ -289,10 +350,18 @@ func (a *auth) login(c echo.Context) error {
 
 	usr, err := gothic.CompleteUserAuth(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
 	if err != nil {
-		a.logger.LogAttrs(c.Request().Context(), slog.LevelWarn, "user is not signed in")
-		a.logger.LogAttrs(c.Request().Context(), slog.LevelInfo, "signing in user")
-		gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
-		return nil
+
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelInfo, "signing in user", slog.String("provider", provider))
+		// gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+
+		redir, err := gothic.GetAuthURL(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+		if err != nil {
+			return a.err(c, err)
+		}
+
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "redirecting user to identity provider", slog.String("provider", provider), slog.String("url", redir))
+
+		return a.redir(c, redir)
 	}
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "success, redirecting", slog.String("uri", a.paths.afterLogin), slog.String("user", usr.UserID))
@@ -345,11 +414,11 @@ func (a *auth) callback(c echo.Context) error {
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "performing callback")
 
-	if a.session.GetBool(c.Request().Context(), a.names.refetch) {
+	if a.session.PopBool(c.Request().Context(), a.names.refetch) {
 		return a.callbackRefetch(c)
 	}
 
-	if a.session.GetBool(c.Request().Context(), a.names.addition) {
+	if a.session.PopBool(c.Request().Context(), a.names.addition) {
 		return a.callbackAddition(c)
 	}
 

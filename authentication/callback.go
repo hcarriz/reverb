@@ -1,6 +1,7 @@
 package authentication
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -60,7 +61,43 @@ func (a *auth) callbackLogin(c echo.Context) error {
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "user was provided", slog.String("provider", provider), slog.String("user_id", u.UserID))
 
-	return a.callbackError(c, "callback refetch not finished", ErrEmptyArgument)
+	id, err := a.db.CreateOrUpdateUser(c.Request().Context(), u.UserID, provider)
+	if err != nil {
+		return a.callbackError(c, "unable to add user to database", err)
+	}
+
+	if id == "" {
+		return a.callbackError(c, "unable to get id from database", errors.New("empty id"))
+	}
+
+	if ok, err := a.db.UserDisabled(c.Request().Context(), u.UserID); err != nil || ok {
+
+		msg := "unable to check user status"
+
+		if err == nil {
+			msg = "user is disabled"
+			err = errors.New(msg)
+
+		}
+
+		return a.callbackError(c, msg, err)
+	}
+
+	a.session.Put(c.Request().Context(), a.names.session, id)
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "added user to session", slog.String("user", id))
+
+	token, _, err := a.session.Commit(c.Request().Context())
+	if err != nil {
+		return a.callbackError(c, "unable to commit to session", err)
+	}
+
+	if err := a.db.AddSessionToUser(c.Request().Context(), u.UserID, token); err != nil {
+		return a.callbackError(c, "unable to add session to user", err)
+	}
+
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "user has been authenticated by identity provider", slog.String("provider", provider), slog.String("url", c.Request().URL.String()))
+
+	return a.redir(c, a.paths.afterLogin)
 
 }
 
@@ -91,5 +128,5 @@ func (a *auth) callbackError(c echo.Context, msg string, err error, attr ...slog
 		})
 	}
 
-	return a.redir(c, a.paths.afterLogout)
+	return c.String(http.StatusMethodNotAllowed, err.Error())
 }

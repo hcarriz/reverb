@@ -12,12 +12,15 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/markbates/goth v1.77.0
+	github.com/muyo/sno v1.2.1
 	github.com/neilotoole/slogt v1.1.0
 	github.com/stretchr/testify v1.8.4
 	github.com/vektah/gqlparser/v2 v2.5.8
 	golang.org/x/sync v0.3.0
 	golang.org/x/time v0.3.0
 )
+
+require github.com/corpix/uarand v0.0.0-20170723150923-031be390f409 // indirect
 
 require (
 	ariga.io/atlas v0.13.3 // indirect
@@ -44,6 +47,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.6 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.0 // indirect
+	github.com/icrowley/fake v0.0.0-20221112152111-d7b7e2276db2
 	github.com/labstack/gommon v0.4.0 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.1 // indirect
@@ -59,6 +63,7 @@ require (
 	github.com/mrjones/oauth v0.0.0-20190623134757-126b35219450 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/spazzymoto/echo-scs-session v1.0.0
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect

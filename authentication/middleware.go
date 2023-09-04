@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"ariga.io/sqlcomment"
-	"github.com/alexedwards/scs/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/markbates/goth/gothic"
 )
@@ -33,7 +32,7 @@ func MiddlewareMustBeAuthenticated(db DB) echo.MiddlewareFunc {
 				return c.NoContent(http.StatusUnauthorized)
 			}
 
-			if _, err := db.GetUser(c.Request().Context(), userID); err != nil {
+			if _, err := db.UserDisabled(c.Request().Context(), userID); err != nil {
 				return c.NoContent(http.StatusUnauthorized)
 			}
 
@@ -58,7 +57,7 @@ func MiddlewareSetIPAddress() echo.MiddlewareFunc {
 	}
 }
 
-func MiddlewareSessionManager(session *scs.SessionManager, key string) echo.MiddlewareFunc {
+func MiddlewareSessionManager(session Session, key string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 
