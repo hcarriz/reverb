@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/icrowley/fake"
 	"github.com/muyo/sno"
 )
+
+var ErrNoUser = errors.New("user does not exist")
 
 type User struct {
 	ID       string
@@ -34,7 +35,7 @@ func (d *DB) GetUserWithSession(_ context.Context, userID string, token string) 
 		}
 	}
 
-	return nil, errors.New("not found")
+	return nil, ErrNoUser
 }
 
 func (d *DB) GetUser(_ context.Context, userID string) (any, error) {
@@ -45,7 +46,7 @@ func (d *DB) GetUser(_ context.Context, userID string) (any, error) {
 		}
 	}
 
-	return nil, errors.New("not found")
+	return nil, ErrNoUser
 }
 func (d *DB) GetUserIDFromToken(_ context.Context, token string) (string, error) {
 	for _, single := range d.users {
@@ -54,34 +55,36 @@ func (d *DB) GetUserIDFromToken(_ context.Context, token string) (string, error)
 		}
 	}
 
-	return "", errors.New("not found")
+	return "", ErrNoUser
 }
 
-func (d *DB) UpdateUserInfo(_ context.Context, id string, email string, name string) error {
+func (d *DB) UpdateUserInfo(_ context.Context, userID string, email string, name string) error {
 
 	for x, single := range d.users {
-		if single.ID == id {
+		if single.ID == userID {
 			d.users[x].Email = email
 			d.users[x].Name = name
+			return nil
 		}
 	}
 
-	return nil
+	return ErrNoUser
 }
 
-func (d *DB) CreateOrUpdateUser(_ context.Context, gothID string, provider string) (string, error) {
+func (d *DB) CreateOrUpdateUser(_ context.Context, gothID, provider, email, name string) (string, error) {
 
-	for _, single := range d.users {
+	for x, single := range d.users {
 		if slices.Contains(single.Gothic, gothID) {
+			d.users[x].Email = email
+			d.users[x].Name = name
 			return single.ID, nil
 		}
 	}
-	// New
 
 	u := User{
 		ID:       sno.New(0).String(),
-		Name:     fake.FullName(),
-		Email:    fake.EmailAddress(),
+		Name:     email,
+		Email:    name,
 		Gothic:   []string{gothID},
 		Sessions: []string{},
 		Tokens:   []string{sno.New(0).String()},
@@ -93,7 +96,14 @@ func (d *DB) CreateOrUpdateUser(_ context.Context, gothID string, provider strin
 }
 
 func (d *DB) UserDisabled(_ context.Context, userID string) (bool, error) {
-	return false, nil
+
+	for _, single := range d.users {
+		if single.ID == userID {
+			return false, nil
+		}
+	}
+
+	return false, ErrNoUser
 }
 
 func (d *DB) GetUserID(_ context.Context, gothID string) (string, error) {
@@ -104,7 +114,7 @@ func (d *DB) GetUserID(_ context.Context, gothID string) (string, error) {
 		}
 	}
 
-	return "", errors.New("no user with that id")
+	return "", ErrNoUser
 }
 
 func (d *DB) AddSessionToUser(_ context.Context, gothID, session string) error {
@@ -116,5 +126,5 @@ func (d *DB) AddSessionToUser(_ context.Context, gothID, session string) error {
 		}
 	}
 
-	return errors.New("no user with that id")
+	return ErrNoUser
 }

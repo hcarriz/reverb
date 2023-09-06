@@ -152,7 +152,8 @@ func TestWhoAmI(t *testing.T) {
 
 	wai := wares(a.whoami, def...)
 	li := wares(a.login, def...)
-	callbackLogin := wares(a.callback, def...)
+	cb := wares(a.callback, def...)
+	refe := wares(a.refetch, def...)
 
 	// Who Am I, someone who's not logged in.
 	check.NoError(wai(c))
@@ -213,7 +214,7 @@ func TestWhoAmI(t *testing.T) {
 	c.SetParamNames("provider")
 	c.SetParamValues("faux")
 
-	check.NoError(callbackLogin(c))
+	check.NoError(cb(c))
 
 	check.Equal(http.StatusTemporaryRedirect, rec.Result().StatusCode)
 
@@ -237,5 +238,44 @@ func TestWhoAmI(t *testing.T) {
 	t.Log(string(data))
 
 	check.NoError(rec.Result().Body.Close())
+
+	// Test Refetch
+
+	req = httptest.NewRequest(http.MethodGet, "/auth/refetch/faux", nil)
+	for _, c := range rec.Result().Cookies() {
+		req.AddCookie(c)
+	}
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+
+	c.SetPath("/auth/refetch/:provider")
+	c.SetParamNames("provider")
+	c.SetParamValues("faux")
+
+	check.NoError(refe(c))
+
+	check.Equal(http.StatusTemporaryRedirect, rec.Result().StatusCode)
+
+	// Use has logged in, is redirected to the callback page.
+
+	qu, err = url.Parse(rec.Header().Get("Location"))
+	check.NoError(err)
+
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/auth/callback/faux?%s", qu.Query().Encode()), nil)
+
+	for _, c := range rec.Result().Cookies() {
+		req.AddCookie(c)
+	}
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+
+	c.SetPath("/auth/callback/:provider")
+	c.SetParamNames("provider")
+	c.SetParamValues("faux")
+
+	check.NoError(cb(c))
+
+	check.Equal(http.StatusTemporaryRedirect, rec.Result().StatusCode)
+	check.Equal(a.paths.afterLogin, rec.Header().Get("Location"))
 
 }

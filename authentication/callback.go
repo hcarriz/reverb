@@ -32,6 +32,8 @@ func (a *auth) callbackRefetch(c echo.Context) error {
 
 	provider := c.Param(a.names.provider)
 
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "refetching user information", slog.String("provider", provider))
+
 	if err := a.session.RenewToken(c.Request().Context()); err != nil {
 		return a.callbackError(c, "unable to renew token", err)
 	}
@@ -43,13 +45,26 @@ func (a *auth) callbackRefetch(c echo.Context) error {
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "user was provided", slog.String("provider", provider), slog.String("user_id", u.UserID))
 
-	return a.callbackError(c, "callback refetch not finished", ErrEmptyArgument)
+	id, err := a.db.GetUserID(c.Request().Context(), u.UserID)
+	if err != nil {
+		return a.callbackError(c, "unable to find user with provider id", err, slog.String("provider_user_id", u.UserID), slog.String("provider", provider))
+	}
+
+	if err := a.db.UpdateUserInfo(c.Request().Context(), id, u.Email, gothicName(u)); err != nil {
+		return a.callbackError(c, "unable to update user information", err, slog.String("user", id))
+	}
+
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "user was updated", slog.String("user", id))
+
+	return a.redirect(c, a.paths.afterLogin, true)
 
 }
 func (a *auth) callbackLogin(c echo.Context) error {
 
 	provider := c.Param(a.names.provider)
 
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "performing login callback", slog.String("provider", provider))
+
 	if err := a.session.RenewToken(c.Request().Context()); err != nil {
 		return a.callbackError(c, "unable to renew token", err)
 	}
@@ -61,7 +76,7 @@ func (a *auth) callbackLogin(c echo.Context) error {
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "user was provided", slog.String("provider", provider), slog.String("user_id", u.UserID))
 
-	id, err := a.db.CreateOrUpdateUser(c.Request().Context(), u.UserID, provider)
+	id, err := a.db.CreateOrUpdateUser(c.Request().Context(), u.UserID, provider, u.Email, gothicName(u))
 	if err != nil {
 		return a.callbackError(c, "unable to add user to database", err)
 	}
@@ -70,7 +85,7 @@ func (a *auth) callbackLogin(c echo.Context) error {
 		return a.callbackError(c, "unable to get id from database", errors.New("empty id"))
 	}
 
-	if ok, err := a.db.UserDisabled(c.Request().Context(), u.UserID); err != nil || ok {
+	if ok, err := a.db.UserDisabled(c.Request().Context(), id); err != nil || ok {
 
 		msg := "unable to check user status"
 
@@ -80,7 +95,7 @@ func (a *auth) callbackLogin(c echo.Context) error {
 
 		}
 
-		return a.callbackError(c, msg, err)
+		return a.callbackError(c, msg, err, slog.String("user", u.UserID))
 	}
 
 	a.session.Put(c.Request().Context(), a.names.session, id)
@@ -97,7 +112,7 @@ func (a *auth) callbackLogin(c echo.Context) error {
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "user has been authenticated by identity provider", slog.String("provider", provider), slog.String("url", c.Request().URL.String()))
 
-	return a.redir(c, a.paths.afterLogin)
+	return a.redirect(c, a.paths.afterLogin, true)
 
 }
 

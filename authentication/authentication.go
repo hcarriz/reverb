@@ -52,13 +52,13 @@ type Log interface {
 // gothID is for the id of the user from the provider.
 // userID is for the id of the user from the database.
 type DB interface {
-	GetUserWithSession(ctx context.Context, userID string, token string) (user any, err error) // Get the user with the userID and the active token.
-	GetUserID(ctx context.Context, gothID string) (userID string, err error)                   // GetUserID takes a id from goth and searches for a user in the database. It returns the id of the user
-	GetUserIDFromToken(ctx context.Context, apiToken string) (string, error)                   // Get the user id from the api key
-	UpdateUserInfo(ctx context.Context, id string, email string, name string) error
-	CreateOrUpdateUser(ctx context.Context, gothID string, provider string) (userID string, err error)
-	UserDisabled(ctx context.Context, userID string) (disabled bool, err error)
-	AddSessionToUser(ctx context.Context, gothID string, session string) error
+	GetUserWithSession(ctx context.Context, userID string, token string) (user any, err error)               // Get the user with the userID and the active token.
+	GetUserID(ctx context.Context, gothID string) (userID string, err error)                                 // GetUserID takes a id from goth and searches for a user in the database. It returns the id of the user
+	GetUserIDFromToken(ctx context.Context, apiToken string) (string, error)                                 // Get the user id from the api key
+	UpdateUserInfo(ctx context.Context, id string, email string, name string) error                          // Update a user with the given id from the database with the given email and name.
+	CreateOrUpdateUser(ctx context.Context, gothID, provider, email, name string) (userID string, err error) // Create or update a user for the given gothID
+	UserDisabled(ctx context.Context, userID string) (disabled bool, err error)                              // Check if a user is disabled.
+	AddSessionToUser(ctx context.Context, gothID string, session string) error                               // Adds the session to the user with the connected goth id. Returns an error if a user is not connected to the goth id.
 }
 
 type auth struct {
@@ -286,21 +286,28 @@ func New(g *echo.Echo, opts ...Option) error {
 	return nil
 }
 
-func (a *auth) redir(c echo.Context, path string) error {
+func (a *auth) redirect(c echo.Context, path string, internal bool) error {
 
-	if a.frontend != nil {
+	if a.frontend != nil && internal {
+
+		p1 := path
 
 		u2 := cloneURL(a.frontend)
 		u2.Path = path
 
 		path = u2.String()
 
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "transforming internal url", slog.String("from", p1), slog.String("to", path))
+
 	}
+
+	a.logger.LogAttrs(context.Background(), slog.LevelDebug, "redirecting", slog.Bool("internal", internal), slog.String("to", path))
 
 	return c.Redirect(http.StatusTemporaryRedirect, path)
 }
 
-func (a *auth) err(c echo.Context, err error) error {
+func (a *auth) err(c echo.Context, msg string, err error, attrs ...slog.Attr) error {
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelError, msg, attrs...)
 	return c.String(http.StatusMethodNotAllowed, err.Error())
 }
 
@@ -352,21 +359,20 @@ func (a *auth) login(c echo.Context) error {
 	if err != nil {
 
 		a.logger.LogAttrs(c.Request().Context(), slog.LevelInfo, "signing in user", slog.String("provider", provider))
-		// gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
 
 		redir, err := gothic.GetAuthURL(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
 		if err != nil {
-			return a.err(c, err)
+			return a.err(c, "unable to get auth url", err)
 		}
 
 		a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "redirecting user to identity provider", slog.String("provider", provider), slog.String("url", redir))
 
-		return a.redir(c, redir)
+		return a.redirect(c, redir, false)
 	}
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "success, redirecting", slog.String("uri", a.paths.afterLogin), slog.String("user", usr.UserID))
 
-	return a.redir(c, a.paths.afterLogin)
+	return a.redirect(c, a.paths.afterLogin, true)
 
 }
 
@@ -386,7 +392,7 @@ func (a *auth) logout(c echo.Context) error {
 		a.logger.LogAttrs(c.Request().Context(), slog.LevelError, "unable to destroy session", slerr(err))
 	}
 
-	return a.redir(c, a.paths.afterLogout)
+	return a.redirect(c, a.paths.afterLogout, true)
 }
 
 func (a *auth) addExistingAccount(c echo.Context) error {
@@ -405,23 +411,27 @@ func (a *auth) addExistingAccount(c echo.Context) error {
 
 	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "redirecting to provider", slog.String("provider", provider))
 
-	gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+	u, err := gothic.GetAuthURL(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+	if err != nil {
+		return a.err(c, "unable to get auth url", err, slog.String("provider", provider))
+	}
 
-	return nil
+	return a.redirect(c, u, false)
 }
 
 func (a *auth) callback(c echo.Context) error {
 
-	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "performing callback")
-
 	if a.session.PopBool(c.Request().Context(), a.names.refetch) {
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "performing refetch callback")
 		return a.callbackRefetch(c)
 	}
 
 	if a.session.PopBool(c.Request().Context(), a.names.addition) {
+		a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "performing addition callback")
 		return a.callbackAddition(c)
 	}
 
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "performing login callback")
 	return a.callbackLogin(c)
 }
 
@@ -429,18 +439,25 @@ func (a *auth) refetch(c echo.Context) error {
 
 	provider := c.Param(a.names.provider)
 
-	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "refetching data", slog.String("from", provider))
+	a.logger.LogAttrs(c.Request().Context(), slog.LevelDebug, "refetching data", slog.String("provider", provider))
 
 	usr := a.session.GetString(c.Request().Context(), a.names.session)
 	if usr != "" {
 		return c.NoContent(http.StatusUnauthorized)
 	}
 
+	u, err := gothic.GetAuthURL(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+	if err != nil {
+		return a.err(c, "unable to get auth url", err, slog.String("provider", provider))
+	}
+
 	a.session.Put(c.Request().Context(), a.names.refetch, true)
 
-	gothic.BeginAuthHandler(c.Response(), gothic.GetContextWithProvider(c.Request(), provider))
+	if _, _, err := a.session.Commit(c.Request().Context()); err != nil {
+		return a.err(c, "unable to commit session", err)
+	}
 
-	return nil
+	return a.redirect(c, u, false)
 
 }
 
