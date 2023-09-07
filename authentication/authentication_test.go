@@ -256,8 +256,6 @@ func TestWhoAmI(t *testing.T) {
 
 	check.Equal(http.StatusTemporaryRedirect, rec.Result().StatusCode)
 
-	// Use has logged in, is redirected to the callback page.
-
 	qu, err = url.Parse(rec.Header().Get("Location"))
 	check.NoError(err)
 

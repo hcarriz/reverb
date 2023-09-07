@@ -232,7 +232,7 @@ func New(opts ...Option) (*echo.Echo, error) {
 	c.echo.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogValuesFunc: func(ctx echo.Context, v middleware.RequestLoggerValues) error {
 
-			c.logger.LogAttrs(ctx.Request().Context(), slog.LevelInfo, "",
+			attrs := []slog.Attr{
 				slog.String("id", v.RequestID),
 				slog.String("remote_ip", v.RemoteIP),
 				slog.String("host", v.Host),
@@ -240,11 +240,16 @@ func New(opts ...Option) (*echo.Echo, error) {
 				slog.String("uri", v.URI),
 				slog.String("user_agent", v.UserAgent),
 				slog.Int("status", v.Status),
-				slog.String("error", v.Error.Error()),
 				slog.Duration("latency", v.Latency),
 				slog.String("content_length", v.ContentLength),
 				slog.Int64("response_size", v.ResponseSize),
-			)
+			}
+
+			if v.Error != nil {
+				attrs = append(attrs, slog.String("error", v.Error.Error()))
+			}
+
+			c.logger.LogAttrs(ctx.Request().Context(), slog.LevelInfo, "", attrs...)
 
 			return nil
 		},
