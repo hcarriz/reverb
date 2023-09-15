@@ -153,10 +153,6 @@ func Path(method string, path string, handler echo.HandlerFunc, middleware ...ec
 			return ErrInvalidHTTPMethod
 		}
 
-		if path != "" {
-			return ErrEmptyPath
-		}
-
 		c.echo.Add(method, path, handler, middleware...)
 
 		return nil
