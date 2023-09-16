@@ -40,11 +40,12 @@ type config struct {
 
 // Errors
 var (
-	ErrInvalidLogger     = errors.New("invalid logger")
-	ErrInvalidHTTPMethod = errors.New("invalid http method")
 	ErrEmptyPath         = errors.New("empty path")
-	ErrMissingRoutes     = errors.New("missing route")
+	ErrEmptyRenderer     = errors.New("renderer is empty")
 	ErrInvalidDuration   = errors.New("invalid duration")
+	ErrInvalidHTTPMethod = errors.New("invalid http method")
+	ErrInvalidLogger     = errors.New("invalid logger")
+	ErrMissingRoutes     = errors.New("missing route")
 )
 
 // Option is a functional optional pattern
@@ -129,7 +130,17 @@ func SinglePageApplication(path string, fs embed.FS) Option {
 		middleware.StaticConfig{
 			Root:       path,
 			HTML5:      true,
-			Browse:     false,
+			Filesystem: http.FS(fs),
+		},
+	))
+}
+
+// Assets is used to serve embeded assets, i.e., css, js, or img.
+func Assets(path string, fs embed.FS, browse bool) Option {
+	return WithMiddleware(middleware.StaticWithConfig(
+		middleware.StaticConfig{
+			Root:       path,
+			Browse:     browse,
 			Filesystem: http.FS(fs),
 		},
 	))
@@ -186,6 +197,7 @@ func Playground(path string, middleware ...echo.MiddlewareFunc) Option {
 	}, middleware...)
 }
 
+// Timeout sets the timeout to all routes.
 func Timeout(duration time.Duration) Option {
 
 	if duration < 0 {
@@ -195,6 +207,28 @@ func Timeout(duration time.Duration) Option {
 	return WithMiddleware(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
 		Timeout: duration,
 	}))
+}
+
+// Quiet hides the port information and the banner.
+func Quiet() Option {
+	return option(func(c *config) error {
+		c.echo.HideBanner = true
+		c.echo.HidePort = true
+		return nil
+	})
+}
+
+func Renderer(r echo.Renderer) Option {
+	return option(func(c *config) error {
+
+		if r == nil {
+			return ErrEmptyRenderer
+		}
+
+		c.echo.Renderer = r
+
+		return nil
+	})
 }
 
 func New(opts ...Option) (*echo.Echo, error) {
