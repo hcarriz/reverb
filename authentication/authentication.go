@@ -222,6 +222,48 @@ func SetBackend(raw string) Option {
 	})
 }
 
+// SetDatabase sets the database that will be used.
+func SetDatabase(db DB) Option {
+	return option(func(a *auth) error {
+
+		if db == nil {
+			return ErrEmptyArgument
+		}
+
+		a.db = db
+
+		return nil
+	})
+}
+
+func SetPaths(login, logout, profile, err string) Option {
+	return option(func(a *auth) error {
+
+		a.paths = paths{
+			afterError:  err,
+			afterLogin:  login,
+			afterLogout: logout,
+			profile:     profile,
+		}
+
+		return nil
+	})
+}
+
+func SetNames(sesson, provider, refetch, addition string) Option {
+	return option(func(a *auth) error {
+
+		a.names = names{
+			session:  sesson,
+			provider: provider,
+			refetch:  refetch,
+			addition: addition,
+		}
+
+		return nil
+	})
+}
+
 func New(g *echo.Echo, opts ...Option) error {
 
 	a := &auth{

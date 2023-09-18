@@ -117,24 +117,18 @@ func TestWhoAmI(t *testing.T) {
 
 	c := e.NewContext(req, rec)
 
-	a := &auth{
-		session: sm,
-		// backend:   &url.URL{},
-		// frontend:  &url.URL{},
-		logger: slogt.New(t),
-		paths: paths{
-			afterError:  "/",
-			afterLogin:  "/",
-			afterLogout: "/",
-			profile:     "/",
-		},
-		names: names{
-			session:  "app_session",
-			provider: "provider",
-			refetch:  "app_refetch",
-			addition: "app_addition",
-		},
-		db: &dummy.DB{},
+	a := &auth{}
+
+	opts := Options{
+		SetDatabase(&dummy.DB{}),
+		SetLogger(slogt.New(t)),
+		SetSessions(sm),
+		SetPaths("/", "/", "/", "/"),
+		SetNames("app_session", "provider", "app_refetch", "app_addition"),
+	}
+
+	for _, opt := range opts {
+		check.NoError(opt.apply(a))
 	}
 
 	prv := &faux.Provider{}
