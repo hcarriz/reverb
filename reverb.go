@@ -189,6 +189,19 @@ func GraphQL(path string, websockets bool, input *handler.Server, middleware ...
 	return list
 }
 
+// AddEntToContext is used to add an ent.Client to an echo.Context.
+// You would use this middlware with reverb.GraphQL.
+// Usage: reverb.AddEntToContext(ent.NewContext, client)
+func AddEntToContext[T any](f func(context.Context, T) context.Context, db T) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			req := c.Request().Clone(f(c.Request().Context(), db))
+			c.SetRequest(req)
+			return next(c)
+		}
+	}
+}
+
 // Playground adds the GraphQL Playground. This is usually for debugging.
 func Playground(path, graph string, middleware ...echo.MiddlewareFunc) Option {
 	return Path(http.MethodGet, path, func(c echo.Context) error {
