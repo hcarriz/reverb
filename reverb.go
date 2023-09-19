@@ -190,9 +190,9 @@ func GraphQL(path string, websockets bool, input *handler.Server, middleware ...
 }
 
 // Playground adds the GraphQL Playground. This is usually for debugging.
-func Playground(path string, middleware ...echo.MiddlewareFunc) Option {
+func Playground(path, graph string, middleware ...echo.MiddlewareFunc) Option {
 	return Path(http.MethodGet, path, func(c echo.Context) error {
-		playground.Handler("GraphQL", path).ServeHTTP(c.Response(), c.Request())
+		playground.Handler("GraphQL", graph).ServeHTTP(c.Response(), c.Request())
 		return nil
 	}, middleware...)
 }

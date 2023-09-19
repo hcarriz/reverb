@@ -36,6 +36,8 @@ func WithExtensions(extensions ...graphql.HandlerExtension) Option {
 	})
 }
 
+// Ent allows for you to use ent.FromContext in your resolvers.
+// Be sure to pass a context with your ent client to your request. Use ent.NewContext
 func Ent(client entgql.TxOpener) Option {
 	return WithExtensions(entgql.Transactioner{TxOpener: client})
 }
