@@ -15,11 +15,17 @@ func TestViewer(t *testing.T) {
 
 	id := "test"
 
-	check.Equal("", GetUserID[string](ctx))
+	fid, ok := GetUserID[string](ctx)
+	check.False(ok)
+
+	check.Equal("", fid)
 
 	ctx = SetUserID(ctx, id)
 
-	check.Equal(id, GetUserID[string](ctx))
+	fid, ok = GetUserID[string](ctx)
+	check.True(ok)
+
+	check.Equal(id, fid)
 
 	check.Equal("127.0.0.1", GetAddress(ctx))
 
@@ -28,5 +34,19 @@ func TestViewer(t *testing.T) {
 	ctx = SetAddress(ctx, ip)
 
 	check.Equal(ip, GetAddress(ctx))
+
+	check.False(IsSystem(ctx))
+
+	ctx = SetSystem(ctx)
+
+	check.True(IsSystem(ctx))
+
+}
+
+func TestComplete(t *testing.T) {
+
+	check := require.New(t)
+
+	check.Equal(ContextIP.v, ContextIP.String())
 
 }

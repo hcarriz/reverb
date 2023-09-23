@@ -22,9 +22,7 @@ type ID interface {
 	~int | ~string
 }
 
-// Get
-func Get[T ID](ctx context.Context, thing Value) (T, bool) {
-
+func getter[T any](ctx context.Context, thing Value) (T, bool) {
 	if id, ok := ctx.Value(thing).(T); ok {
 		return id, true
 	}
@@ -32,21 +30,38 @@ func Get[T ID](ctx context.Context, thing Value) (T, bool) {
 	var empty T
 
 	return empty, false
-
 }
 
-func Set[T ID](ctx context.Context, thing Value, data T) context.Context {
+func setter[T any](ctx context.Context, thing Value, data T) context.Context {
 	return context.WithValue(ctx, thing, data)
 }
 
+// Get
+func Get[T ID](ctx context.Context, thing Value) (T, bool) {
+	return getter[T](ctx, thing)
+}
+
+func Set[T ID](ctx context.Context, thing Value, data T) context.Context {
+	return setter[T](ctx, thing, data)
+}
+
 // User ID
-func GetUserID[T ID](ctx context.Context) T {
-	result, _ := Get[T](ctx, ContextUserID)
-	return result
+func GetUserID[T ID](ctx context.Context) (T, bool) {
+	return Get[T](ctx, ContextUserID)
 }
 
 func SetUserID[T ID](ctx context.Context, id T) context.Context {
 	return Set(ctx, ContextUserID, id)
+}
+
+// System
+func SetSystem(ctx context.Context) context.Context {
+	return setter(ctx, ContextSystem, true)
+}
+
+func IsSystem(ctx context.Context) bool {
+	result, ok := getter[bool](ctx, ContextSystem)
+	return ok && result
 }
 
 // IP Address
