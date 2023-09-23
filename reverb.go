@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -120,12 +121,12 @@ func WithRateLimit(limit rate.Limit) Option {
 }
 
 // SPA is a shorthand for Single Page Application
-func SPA(path string, fs embed.FS) Option {
-	return SinglePageApplication(path, fs)
+func SPA(path string, files fs.FS) Option {
+	return SinglePageApplication(path, files)
 }
 
 // SinglePageApplication is used to server a Single Page Application from an embed.FS
-func SinglePageApplication(path string, fs embed.FS) Option {
+func SinglePageApplication(path string, fs fs.FS) Option {
 	return WithMiddleware(middleware.StaticWithConfig(
 		middleware.StaticConfig{
 			Root:       path,
