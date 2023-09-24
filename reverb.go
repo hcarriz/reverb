@@ -2,7 +2,6 @@ package reverb
 
 import (
 	"context"
-	"embed"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -136,8 +135,8 @@ func SinglePageApplication(path string, fs fs.FS) Option {
 	))
 }
 
-// Assets is used to serve embeded assets, i.e., css, js, or img.
-func Assets(path string, fs embed.FS, browse bool) Option {
+// Assets is used to serve embedded assets, i.e., css, js, or img.
+func Assets(path string, fs fs.FS, browse bool) Option {
 	return WithMiddleware(middleware.StaticWithConfig(
 		middleware.StaticConfig{
 			Root:       path,

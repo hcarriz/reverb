@@ -147,10 +147,7 @@ func WithProvider(p provider.Provider, key, secret, callbackDomain, source strin
 
 		u.Path = fmt.Sprintf("/auth/callback/%s", p)
 
-		d := cloneURL(u)
-		d.Path = ""
-
-		if err := p.Use(key, secret, callbackDomain, source); err != nil {
+		if err := p.Use(key, secret, u.String(), source); err != nil {
 			return err
 		}
 
