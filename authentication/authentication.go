@@ -150,7 +150,9 @@ func WithProvider(p provider.Provider, key, secret, callbackDomain, source strin
 		d := cloneURL(u)
 		d.Path = ""
 
-		p.Use(key, secret, callbackDomain, source)
+		if err := p.Use(key, secret, callbackDomain, source); err != nil {
+			return err
+		}
 
 		a.providers = append(a.providers, p)
 
@@ -314,7 +316,6 @@ func New(g *echo.Echo, opts ...Option) error {
 		MiddlewareBearerToken(a.db),
 		MiddlewareSessionManager(a.session, a.names.session),
 		MiddlewareOIDC(),
-		MiddlewareSetIPAddress(),
 	)
 
 	group.GET(fmt.Sprintf("/add/:%s", a.names.provider), a.addExistingAccount, MiddlewareMustBeAuthenticated(a.db))

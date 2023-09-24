@@ -3,6 +3,7 @@ package authentication
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,10 +11,12 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/gorilla/sessions"
 	"github.com/hcarriz/reverb/authentication/dummy"
+	"github.com/hcarriz/reverb/authentication/provider"
 	"github.com/icrowley/fake"
 	"github.com/labstack/echo/v4"
 	"github.com/markbates/goth"
@@ -269,5 +272,52 @@ func TestWhoAmI(t *testing.T) {
 
 	check.Equal(http.StatusTemporaryRedirect, rec.Result().StatusCode)
 	check.Equal(a.paths.afterLogin, rec.Header().Get("Location"))
+
+}
+
+func TestEr(t *testing.T) {
+
+	check := require.New(t)
+
+	port := 3215
+	timeout := 10 * time.Second
+
+	e := echo.New()
+	sm := scs.New()
+	sl := slogt.New(t)
+
+	e.Use(session.LoadAndSave(sm))
+	var err error
+
+	gothic.Store = sessions.NewCookieStore([]byte("insecure_key"))
+
+	check.NoError(New(e,
+		SetDatabase(&dummy.DB{}),
+		SetSessions(sm),
+		SetLogger(sl),
+		WithProvider(provider.OpenID, "kbyuFDidLLm280LIwVFiazOqjO3ty8KH", "60Op4HFM0I8ajz0WdiStAbziZ-VFQttXuxixHHs2R7r7-CW8GR79l-mmLqMhc-Sa", "https://openidconnect.net/callback", "https://samples.auth0.com/.well-known/openid-configuration"),
+	))
+
+	go func() {
+		e.Start(fmt.Sprintf(":%d", port))
+	}()
+
+	time.Sleep(300 * time.Millisecond)
+
+	client := &http.Client{Timeout: timeout}
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/auth/login/openid-connect", port), nil)
+	check.NoError(err)
+
+	resp, err := client.Do(req)
+	check.NoError(err)
+
+	check.NotEqual(http.StatusMethodNotAllowed, resp.StatusCode)
+
+	// Shutdown the server
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	check.NoError(e.Shutdown(ctx))
 
 }

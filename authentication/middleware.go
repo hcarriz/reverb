@@ -41,22 +41,6 @@ func MiddlewareMustBeAuthenticated(db DB) echo.MiddlewareFunc {
 	}
 }
 
-func MiddlewareSetIPAddress() echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-
-			ctx := c.Request().Context()
-
-			ctx = context.WithValue(ctx, "ip_address", c.RealIP())
-
-			req := c.Request().Clone(ctx)
-
-			return next(c.Echo().NewContext(req, c.Response()))
-
-		}
-	}
-}
-
 func MiddlewareSessionManager(session Session, key string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
