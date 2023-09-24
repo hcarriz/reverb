@@ -110,7 +110,7 @@ func Origins(list ...string) Option {
 				return ErrHasQuery
 			case u.Path != "":
 				return ErrHasPath
-			case u.Scheme != "":
+			case u.Scheme == "":
 				return ErrMissingScheme
 			}
 
@@ -122,6 +122,7 @@ func Origins(list ...string) Option {
 	})
 }
 
+// Headers is used to give the headers that are allowed, others are not allowed.
 func Headers(list ...string) Option {
 	return option(func(c *middleware.CORSConfig) error {
 

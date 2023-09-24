@@ -24,6 +24,14 @@ func TestNew(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "passing origins",
+			args: []Option{
+				Origins("https://google.com"),
+				Origins("http://local.localdomain:8080"),
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
