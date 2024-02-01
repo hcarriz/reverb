@@ -150,9 +150,6 @@ func Compare(plaintext string, pwd Password) (bool, error) {
 
 	maybe := argon2.IDKey([]byte(plaintext), pwd.Salt, pwd.Iterations, pwd.Memory, pwd.Parallelism, uint32(len(pwd.Salt)))
 
-	fmt.Println(base64.RawStdEncoding.EncodeToString(maybe))
-	fmt.Println(base64.RawStdEncoding.EncodeToString(pwd.Key))
-
 	if subtle.ConstantTimeCompare(pwd.Key, maybe) == 1 {
 		return true, nil
 	}
