@@ -15,7 +15,7 @@ require (
 	github.com/muyo/sno v1.2.1
 	github.com/neilotoole/slogt v1.1.0
 	github.com/stretchr/testify v1.9.0
-	github.com/vektah/gqlparser/v2 v2.5.8
+	github.com/vektah/gqlparser/v2 v2.5.14
 	golang.org/x/sync v0.3.0
 	golang.org/x/time v0.3.0
 	modernc.org/sqlite v1.25.0
